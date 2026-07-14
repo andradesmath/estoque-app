@@ -40,9 +40,5 @@ export default function App() {
     return <Dashboard sessao={sessao} onSelectCategoria={irParaSetor} />;
   }
 
-  if (tela === 'setor' && categoriaAtiva) {
-    return <Setor sessao={sessao} categoria={categoriaAtiva} onVoltar={voltarDashboard} />;
-  }
-
-  return <Dashboard sessao={sessao} onSelectCategoria={irParaSetor} />;
+  return <Setor sessao={sessao} categoria={categoriaAtiva} onVoltar={voltarDashboard} />;
 }
