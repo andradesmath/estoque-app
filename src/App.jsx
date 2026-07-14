@@ -10,7 +10,7 @@ import Auth from "./Auth";
 const DIAS_ALERTA_VENCIMENTO = 90;
 const UNIDADES = ["L", "mL", "kg", "g", "un"];
 
-// ===== NOVOS LOCAIS ADICIONADOS =====
+// ===== LOCAIS (prateleiras) =====
 const LOCAIS = [
   "Casa de Adubo - Depósito",
   "Casa de Adubo - Balcão",
@@ -18,11 +18,11 @@ const LOCAIS = [
   "Porteira - Balcão",
   "Sérgio - Depósito",
   "Luciano - Depósito",
-  "Piatã - Depósito",    // NOVO
-  "Piatã - Balcão",      // NOVO
+  "Piatã - Depósito",
+  "Piatã - Balcão",
 ];
 
-// ===== MOTIVOS PARA SAÍDA =====
+// ===== MOTIVOS DE SAÍDA =====
 const MOTIVOS_SAIDA = [
   "Aplicação",
   "Perda por Deterioração",
@@ -32,7 +32,9 @@ const MOTIVOS_SAIDA = [
   "Outro"
 ];
 
+// ===== ESTADO INICIAL DO FORMULÁRIO =====
 const vazio = {
+  produto_id: "",       // <-- novo campo
   nome: "",
   lote: "",
   validade: "",
@@ -87,8 +89,9 @@ export default function App() {
   const [sessao, setSessao] = useState(null);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
 
-  // ===== ESTADOS DOS DADOS =====
+  // ===== DADOS =====
   const [itens, setItens] = useState([]);
+  const [produtos, setProdutos] = useState([]); // <-- lista de produtos importados
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -108,7 +111,7 @@ export default function App() {
   const [itemRetirar, setItemRetirar] = useState(null);
   const [qtdRetirar, setQtdRetirar] = useState("");
   const [motivoRetirar, setMotivoRetirar] = useState("");
-  const [motivoPersonalizado, setMotivoPersonalizado] = useState(""); // para "Outro"
+  const [motivoPersonalizado, setMotivoPersonalizado] = useState("");
 
   const [mostrarTransferir, setMostrarTransferir] = useState(false);
   const [itemTransferir, setItemTransferir] = useState(null);
@@ -134,12 +137,25 @@ export default function App() {
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  // ===== CARREGAR ITENS (quando sessão mudar) =====
+  // ===== CARREGAR PRODUTOS E ITENS (quando sessão mudar) =====
   useEffect(() => {
     if (sessao) {
+      carregarProdutos();
       carregarItens();
     }
   }, [sessao]);
+
+  async function carregarProdutos() {
+    const { data, error } = await supabase
+      .from("produtos")
+      .select("*")
+      .order("nome", { ascending: true });
+    if (error) {
+      console.error("Erro ao carregar produtos:", error);
+    } else {
+      setProdutos(data || []);
+    }
+  }
 
   async function carregarItens() {
     setCarregando(true);
@@ -159,13 +175,14 @@ export default function App() {
 
   // ===== FUNÇÕES DO FORMULÁRIO =====
   function abrirNovo() {
-    setForm(vazio);
+    setForm({ ...vazio });
     setEditandoId(null);
     setMostrarForm(true);
   }
 
   function abrirEdicao(item) {
     setForm({
+      produto_id: item.produto_id || "",
       nome: item.nome,
       lote: item.lote,
       validade: item.validade,
@@ -184,21 +201,36 @@ export default function App() {
     setEditandoId(null);
   }
 
+  // Quando seleciona um produto, preenche nome e produto_id
+  function handleProdutoSelecionado(produtoId) {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (produto) {
+      setForm({
+        ...form,
+        produto_id: produto.id,
+        nome: produto.nome,
+      });
+    } else {
+      setForm({ ...form, produto_id: "", nome: "" });
+    }
+  }
+
   async function salvarForm() {
     if (
-      !form.nome.trim() ||
+      !form.produto_id ||
       !form.lote.trim() ||
       !form.validade ||
       form.quantidade === "" ||
       form.minimo === "" ||
       !form.local
     ) {
-      setErro("Preencha todos os campos obrigatórios.");
+      setErro("Preencha todos os campos obrigatórios (produto, lote, validade, quantidade, mínimo e local).");
       return;
     }
     setSalvando(true);
     setErro("");
     const dados = {
+      produto_id: form.produto_id,
       nome: form.nome.trim(),
       lote: form.lote.trim(),
       validade: form.validade,
@@ -235,7 +267,7 @@ export default function App() {
     else carregarItens();
   }
 
-  // ===== RETIRADA (com novos motivos) =====
+  // ===== RETIRADA =====
   function abrirRetirar(item) {
     setItemRetirar(item);
     setQtdRetirar("");
@@ -264,7 +296,6 @@ export default function App() {
       return;
     }
 
-    // Definir o motivo final
     let motivoFinal = motivoRetirar;
     if (motivoRetirar === "Outro") {
       if (!motivoPersonalizado.trim()) {
@@ -429,7 +460,7 @@ export default function App() {
     setCarregandoHistorico(false);
   }
 
-  // ===== CÁLCULOS DE STATUS E FILTROS =====
+  // ===== CÁLCULOS =====
   const itensComStatus = useMemo(
     () =>
       itens.map((it) => {
@@ -466,7 +497,7 @@ export default function App() {
     return [...lista].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [itensComStatus, filtroAlerta, filtroLocal, busca]);
 
-  // ===== CARREGAMENTO INICIAL =====
+  // ===== RENDER =====
   if (carregandoSessao) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-50">
@@ -479,11 +510,10 @@ export default function App() {
     return <Auth onLogin={() => {}} />;
   }
 
-  // ===== RENDER PRINCIPAL =====
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER COM LOGOUT */}
+        {/* HEADER */}
         <header className="relative overflow-hidden bg-gradient-to-r from-green-800 to-green-700 rounded-2xl p-5 sm:p-7 mb-8 shadow-xl shadow-green-900/30 border border-green-600/30">
           <div className="absolute -right-10 -top-10 w-48 h-48 bg-yellow-500/10 rounded-full blur-2xl" />
           <div className="absolute -left-10 bottom-0 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl" />
@@ -523,7 +553,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* CARDS DE ALERTA */}
+        {/* CARDS DE ALERTA (inalterados) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -646,7 +676,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LISTA DE ITENS EM GRID */}
+        {/* LISTA DE ITENS (inalterada) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">
@@ -671,7 +701,6 @@ export default function App() {
                   key={it.id}
                   className="bg-white rounded-2xl border border-gray-200 shadow-md hover:shadow-lg transition-all overflow-hidden flex flex-col"
                 >
-                  {/* Topo com nome e status */}
                   <div className="p-4 pb-2 flex items-start justify-between gap-2 border-b border-gray-100">
                     <div>
                       <h3 className="font-bold text-gray-800 text-lg leading-tight">
@@ -689,7 +718,6 @@ export default function App() {
                     </span>
                   </div>
 
-                  {/* Conteúdo */}
                   <div className="p-4 space-y-2 flex-1">
                     <div className="grid grid-cols-2 gap-1 text-sm">
                       <span className="text-gray-500">Lote:</span>
@@ -717,7 +745,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Ações */}
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
                     <div className="flex gap-1">
                       <button
@@ -757,9 +784,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ===== MODAIS ===== */}
-
-      {/* MODAL - FORMULÁRIO (sem alterações) */}
+      {/* ===== MODAL - FORMULÁRIO (com seletor de produtos) ===== */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -775,17 +800,25 @@ export default function App() {
               </button>
             </div>
             <div className="px-6 py-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* SELETOR DE PRODUTO */}
               <div>
                 <label className="text-xs font-medium text-gray-600">
-                  Nome do produto *
+                  Produto *
                 </label>
-                <input
-                  value={form.nome}
-                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                  className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-shadow"
-                  placeholder="Ex: Glifosato 480"
-                />
+                <select
+                  value={form.produto_id}
+                  onChange={(e) => handleProdutoSelecionado(e.target.value)}
+                  className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                >
+                  <option value="">Selecione um produto...</option>
+                  {produtos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.codigo} - {p.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">
                   Local de armazenamento *
@@ -802,6 +835,7 @@ export default function App() {
                   ))}
                 </select>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Lote *</label>
@@ -822,6 +856,7 @@ export default function App() {
                   />
                 </div>
               </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Quantidade *</label>
@@ -860,11 +895,13 @@ export default function App() {
                   />
                 </div>
               </div>
+
               {erro && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-xl">
                   {erro}
                 </div>
               )}
+
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={fecharForm}
@@ -885,7 +922,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - RETIRAR (com novos motivos) */}
+      {/* ===== MODAL - RETIRAR (com motivos) ===== */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -981,7 +1018,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - TRANSFERIR (com novos locais) */}
+      {/* ===== MODAL - TRANSFERIR ===== */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1076,7 +1113,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - HISTÓRICO (com nome do operador) */}
+      {/* ===== MODAL - HISTÓRICO ===== */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
