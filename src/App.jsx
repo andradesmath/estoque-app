@@ -34,7 +34,7 @@ const MOTIVOS_SAIDA = [
 
 // ===== ESTADO INICIAL DO FORMULÁRIO =====
 const vazio = {
-  produto_id: "",       // <-- novo campo
+  produto_id: "",
   nome: "",
   lote: "",
   validade: "",
@@ -91,7 +91,7 @@ export default function App() {
 
   // ===== DADOS =====
   const [itens, setItens] = useState([]);
-  const [produtos, setProdutos] = useState([]); // <-- lista de produtos importados
+  const [produtos, setProdutos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -137,7 +137,7 @@ export default function App() {
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  // ===== CARREGAR PRODUTOS E ITENS (quando sessão mudar) =====
+  // ===== CARREGAR PRODUTOS E ITENS =====
   useEffect(() => {
     if (sessao) {
       carregarProdutos();
@@ -201,7 +201,6 @@ export default function App() {
     setEditandoId(null);
   }
 
-  // Quando seleciona um produto, preenche nome e produto_id
   function handleProdutoSelecionado(produtoId) {
     const produto = produtos.find(p => p.id === produtoId);
     if (produto) {
@@ -309,7 +308,7 @@ export default function App() {
     setErro("");
     const { error: erroUpdate } = await supabase
       .from("itens")
-      .update({ 
+      .update({
         quantidade: itemRetirar.quantidade - qtd,
         updated_by: sessao.user.id
       })
@@ -376,7 +375,7 @@ export default function App() {
 
     const { error: erroOrigem } = await supabase
       .from("itens")
-      .update({ 
+      .update({
         quantidade: itemTransferir.quantidade - qtd,
         updated_by: sessao.user.id
       })
@@ -400,7 +399,7 @@ export default function App() {
     if (existente) {
       const r = await supabase
         .from("itens")
-        .update({ 
+        .update({
           quantidade: existente.quantidade + qtd,
           updated_by: sessao.user.id
         })
@@ -553,7 +552,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* CARDS DE ALERTA (inalterados) */}
+        {/* CARDS DE ALERTA */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -676,7 +675,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LISTA DE ITENS (inalterada) */}
+        {/* LISTA DE ITENS EM GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">
