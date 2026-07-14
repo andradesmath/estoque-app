@@ -786,7 +786,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
 
       {/* ===== MODAIS ===== */}
 
-      {/* FORMULÁRIO */}
+      {/* MODAL FORMULÁRIO */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -905,7 +905,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* RETIRAR */}
+      {/* MODAL RETIRAR */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -970,7 +970,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* TRANSFERIR */}
+      {/* MODAL TRANSFERIR */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1043,7 +1043,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* HISTÓRICO */}
+      {/* MODAL HISTÓRICO */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
