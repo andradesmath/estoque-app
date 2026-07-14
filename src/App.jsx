@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import {
   AlertTriangle, AlertOctagon, PackageX, PackageMinus,
   ArrowLeftRight, Plus, Trash2, Pencil, X, Check,
-  Package, Search, History, MapPin, Sprout, Tractor
+  Package, Search, History, MapPin, Sprout, Tractor, LogOut
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import Auth from "./Auth";
 
 const DIAS_ALERTA_VENCIMENTO = 90;
 const UNIDADES = ["L", "mL", "kg", "g", "un"];
@@ -67,17 +68,27 @@ function getStatusInfo(item) {
 }
 
 export default function App() {
+  // ===== SESSÃO E AUTENTICAÇÃO =====
+  const [sessao, setSessao] = useState(null);
+  const [carregandoSessao, setCarregandoSessao] = useState(true);
+
+  // ===== ESTADOS DOS DADOS =====
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+
+  // ===== FORMULÁRIO =====
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(vazio);
+
+  // ===== FILTROS =====
   const [busca, setBusca] = useState("");
   const [filtroAlerta, setFiltroAlerta] = useState("todos");
   const [filtroLocal, setFiltroLocal] = useState("todos");
 
+  // ===== MODAIS =====
   const [mostrarRetirar, setMostrarRetirar] = useState(false);
   const [itemRetirar, setItemRetirar] = useState(null);
   const [qtdRetirar, setQtdRetirar] = useState("");
@@ -93,9 +104,26 @@ export default function App() {
   const [historico, setHistorico] = useState([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
+  // ===== EFETTO DE SESSÃO =====
   useEffect(() => {
-    carregarItens();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSessao(session);
+      setCarregandoSessao(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessao(session);
+    });
+
+    return () => listener?.subscription?.unsubscribe();
   }, []);
+
+  // ===== CARREGAR ITENS (quando sessão mudar) =====
+  useEffect(() => {
+    if (sessao) {
+      carregarItens();
+    }
+  }, [sessao]);
 
   async function carregarItens() {
     setCarregando(true);
@@ -108,6 +136,12 @@ export default function App() {
     setCarregando(false);
   }
 
+  // ===== LOGOUT =====
+  async function handleLogout() {
+    await supabase.auth.signOut();
+  }
+
+  // ===== FUNÇÕES DO FORMULÁRIO =====
   function abrirNovo() {
     setForm(vazio);
     setEditandoId(null);
@@ -156,10 +190,22 @@ export default function App() {
       unidade: form.unidade,
       minimo: parseFloat(form.minimo),
       local: form.local,
+      updated_by: sessao.user.id,
     };
-    const { error } = editandoId
-      ? await supabase.from("itens").update(dados).eq("id", editandoId)
-      : await supabase.from("itens").insert(dados);
+    let error;
+    if (editandoId) {
+      // Atualização
+      const { error: e } = await supabase
+        .from("itens")
+        .update(dados)
+        .eq("id", editandoId);
+      error = e;
+    } else {
+      // Inserção
+      dados.created_by = sessao.user.id;
+      const { error: e } = await supabase.from("itens").insert(dados);
+      error = e;
+    }
     if (error) setErro("Erro ao salvar.");
     else {
       await carregarItens();
@@ -175,6 +221,7 @@ export default function App() {
     else carregarItens();
   }
 
+  // ===== RETIRADA =====
   function abrirRetirar(item) {
     setItemRetirar(item);
     setQtdRetirar("");
@@ -197,9 +244,7 @@ export default function App() {
       return;
     }
     if (qtd > itemRetirar.quantidade) {
-      setErro(
-        `Só há ${itemRetirar.quantidade} ${itemRetirar.unidade} em estoque.`
-      );
+      setErro(`Só há ${itemRetirar.quantidade} ${itemRetirar.unidade} em estoque.`);
       return;
     }
 
@@ -207,7 +252,10 @@ export default function App() {
     setErro("");
     const { error: erroUpdate } = await supabase
       .from("itens")
-      .update({ quantidade: itemRetirar.quantidade - qtd })
+      .update({ 
+        quantidade: itemRetirar.quantidade - qtd,
+        updated_by: sessao.user.id
+      })
       .eq("id", itemRetirar.id);
 
     if (erroUpdate) {
@@ -225,6 +273,7 @@ export default function App() {
       local_origem: itemRetirar.local,
       local_destino: null,
       motivo: motivoRetirar.trim() || null,
+      created_by: sessao.user.id,
     });
 
     await carregarItens();
@@ -232,6 +281,7 @@ export default function App() {
     fecharRetirar();
   }
 
+  // ===== TRANSFERÊNCIA =====
   function abrirTransferir(item) {
     setItemTransferir(item);
     setLocalDestino(LOCAIS.find((l) => l !== item.local) || "");
@@ -256,9 +306,7 @@ export default function App() {
       return;
     }
     if (qtd > itemTransferir.quantidade) {
-      setErro(
-        `Só há ${itemTransferir.quantidade} ${itemTransferir.unidade} disponível.`
-      );
+      setErro(`Só há ${itemTransferir.quantidade} ${itemTransferir.unidade} disponível.`);
       return;
     }
     if (!localDestino || localDestino === itemTransferir.local) {
@@ -269,9 +317,13 @@ export default function App() {
     setSalvando(true);
     setErro("");
 
+    // Atualiza origem
     const { error: erroOrigem } = await supabase
       .from("itens")
-      .update({ quantidade: itemTransferir.quantidade - qtd })
+      .update({ 
+        quantidade: itemTransferir.quantidade - qtd,
+        updated_by: sessao.user.id
+      })
       .eq("id", itemTransferir.id);
 
     if (erroOrigem) {
@@ -280,6 +332,7 @@ export default function App() {
       return;
     }
 
+    // Verifica se já existe item com mesmo nome/lote/local destino
     const { data: existente } = await supabase
       .from("itens")
       .select("*")
@@ -292,7 +345,10 @@ export default function App() {
     if (existente) {
       const r = await supabase
         .from("itens")
-        .update({ quantidade: existente.quantidade + qtd })
+        .update({ 
+          quantidade: existente.quantidade + qtd,
+          updated_by: sessao.user.id
+        })
         .eq("id", existente.id);
       erroDestino = r.error;
     } else {
@@ -304,6 +360,8 @@ export default function App() {
         unidade: itemTransferir.unidade,
         minimo: itemTransferir.minimo,
         local: localDestino,
+        created_by: sessao.user.id,
+        updated_by: sessao.user.id,
       });
       erroDestino = r.error;
     }
@@ -323,6 +381,7 @@ export default function App() {
       local_origem: itemTransferir.local,
       local_destino: localDestino,
       motivo: motivoTransferir.trim() || null,
+      created_by: sessao.user.id,
     });
 
     await carregarItens();
@@ -330,6 +389,7 @@ export default function App() {
     fecharTransferir();
   }
 
+  // ===== HISTÓRICO =====
   async function abrirHistorico() {
     setMostrarHistorico(true);
     setCarregandoHistorico(true);
@@ -342,13 +402,13 @@ export default function App() {
     setCarregandoHistorico(false);
   }
 
+  // ===== CÁLCULOS DE STATUS E FILTROS =====
   const itensComStatus = useMemo(
     () =>
       itens.map((it) => {
         const dias = diasAte(it.validade);
         const vencido = dias !== null && dias < 0;
-        const proximoVencimento =
-          !vencido && dias !== null && dias <= DIAS_ALERTA_VENCIMENTO;
+        const proximoVencimento = !vencido && dias !== null && dias <= DIAS_ALERTA_VENCIMENTO;
         const estoqueBaixo = it.quantidade <= it.minimo;
         return { ...it, dias, vencido, proximoVencimento, estoqueBaixo };
       }),
@@ -367,27 +427,36 @@ export default function App() {
   const listaFiltrada = useMemo(() => {
     let lista = itensComStatus;
     if (filtroAlerta === "vencidos") lista = lista.filter((i) => i.vencido);
-    if (filtroAlerta === "proximos")
-      lista = lista.filter((i) => i.proximoVencimento);
-    if (filtroAlerta === "baixos")
-      lista = lista.filter((i) => i.estoqueBaixo);
-    if (filtroLocal !== "todos")
-      lista = lista.filter((i) => i.local === filtroLocal);
+    if (filtroAlerta === "proximos") lista = lista.filter((i) => i.proximoVencimento);
+    if (filtroAlerta === "baixos") lista = lista.filter((i) => i.estoqueBaixo);
+    if (filtroLocal !== "todos") lista = lista.filter((i) => i.local === filtroLocal);
     if (busca.trim()) {
       const b = busca.trim().toLowerCase();
       lista = lista.filter(
-        (i) =>
-          i.nome.toLowerCase().includes(b) || i.lote.toLowerCase().includes(b)
+        (i) => i.nome.toLowerCase().includes(b) || i.lote.toLowerCase().includes(b)
       );
     }
-    // Ordenação alfabética por nome
     return [...lista].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [itensComStatus, filtroAlerta, filtroLocal, busca]);
 
+  // ===== CARREGAMENTO INICIAL =====
+  if (carregandoSessao) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-amber-50">
+        <p className="text-gray-600">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!sessao) {
+    return <Auth onLogin={() => {}} />;
+  }
+
+  // ===== RENDER PRINCIPAL =====
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER AGRÍCOLA */}
+        {/* HEADER COM LOGOUT */}
         <header className="relative overflow-hidden bg-gradient-to-r from-green-800 to-green-700 rounded-2xl p-5 sm:p-7 mb-8 shadow-xl shadow-green-900/30 border border-green-600/30">
           <div className="absolute -right-10 -top-10 w-48 h-48 bg-yellow-500/10 rounded-full blur-2xl" />
           <div className="absolute -left-10 bottom-0 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl" />
@@ -417,11 +486,17 @@ export default function App() {
               >
                 <Plus size={18} /> Novo item
               </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 bg-red-500/20 text-white hover:bg-red-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <LogOut size={18} /> Sair
+              </button>
             </div>
           </div>
         </header>
 
-        {/* CARDS DE ALERTA - Estilo agro */}
+        {/* CARDS DE ALERTA */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -437,25 +512,15 @@ export default function App() {
                 : ""
             }`}
           >
-            <div
-              className={`p-3 rounded-xl ${
-                alertas.vencidos > 0 ? "bg-red-50" : "bg-gray-50"
-              }`}
-            >
+            <div className={`p-3 rounded-xl ${alertas.vencidos > 0 ? "bg-red-50" : "bg-gray-50"}`}>
               <PackageX
                 size={24}
-                className={
-                  alertas.vencidos > 0 ? "text-red-600" : "text-gray-300"
-                }
+                className={alertas.vencidos > 0 ? "text-red-600" : "text-gray-300"}
               />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {alertas.vencidos}
-              </p>
-              <p className="text-xs text-gray-500 font-medium">
-                Produtos vencidos
-              </p>
+              <p className="text-2xl font-bold text-gray-800">{alertas.vencidos}</p>
+              <p className="text-xs text-gray-500 font-medium">Produtos vencidos</p>
             </div>
           </button>
 
@@ -473,22 +538,14 @@ export default function App() {
                 : ""
             }`}
           >
-            <div
-              className={`p-3 rounded-xl ${
-                alertas.proximos > 0 ? "bg-amber-50" : "bg-gray-50"
-              }`}
-            >
+            <div className={`p-3 rounded-xl ${alertas.proximos > 0 ? "bg-amber-50" : "bg-gray-50"}`}>
               <AlertTriangle
                 size={24}
-                className={
-                  alertas.proximos > 0 ? "text-amber-600" : "text-gray-300"
-                }
+                className={alertas.proximos > 0 ? "text-amber-600" : "text-gray-300"}
               />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {alertas.proximos}
-              </p>
+              <p className="text-2xl font-bold text-gray-800">{alertas.proximos}</p>
               <p className="text-xs text-gray-500 font-medium">
                 Vencendo em {DIAS_ALERTA_VENCIMENTO} dias
               </p>
@@ -509,25 +566,15 @@ export default function App() {
                 : ""
             }`}
           >
-            <div
-              className={`p-3 rounded-xl ${
-                alertas.baixos > 0 ? "bg-orange-50" : "bg-gray-50"
-              }`}
-            >
+            <div className={`p-3 rounded-xl ${alertas.baixos > 0 ? "bg-orange-50" : "bg-gray-50"}`}>
               <AlertOctagon
                 size={24}
-                className={
-                  alertas.baixos > 0 ? "text-orange-600" : "text-gray-300"
-                }
+                className={alertas.baixos > 0 ? "text-orange-600" : "text-gray-300"}
               />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">
-                {alertas.baixos}
-              </p>
-              <p className="text-xs text-gray-500 font-medium">
-                Estoque baixo
-              </p>
+              <p className="text-2xl font-bold text-gray-800">{alertas.baixos}</p>
+              <p className="text-xs text-gray-500 font-medium">Estoque baixo</p>
             </div>
           </button>
         </div>
@@ -572,7 +619,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LISTA DE ITENS EM GRID RESPONSIVO */}
+        {/* LISTA DE ITENS EM GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">
@@ -635,7 +682,6 @@ export default function App() {
                         {it.minimo} {it.unidade}
                       </span>
                     </div>
-                    {/* Barra de progresso */}
                     <div className="mt-1 h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${corProgresso(pct)}`}
@@ -684,9 +730,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* MODAIS - mantidos com mesmo estilo refinado, apenas ajuste de cores agro */}
-
-      {/* MODAL - FORMULÁRIO */}
+      {/* ===== MODAIS ===== */}
+      {/* FORMULÁRIO */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -731,9 +776,7 @@ export default function App() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-600">
-                    Lote *
-                  </label>
+                  <label className="text-xs font-medium text-gray-600">Lote *</label>
                   <input
                     value={form.lote}
                     onChange={(e) => setForm({ ...form, lote: e.target.value })}
@@ -742,44 +785,32 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600">
-                    Validade *
-                  </label>
+                  <label className="text-xs font-medium text-gray-600">Validade *</label>
                   <input
                     type="date"
                     value={form.validade}
-                    onChange={(e) =>
-                      setForm({ ...form, validade: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, validade: e.target.value })}
                     className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-600">
-                    Quantidade *
-                  </label>
+                  <label className="text-xs font-medium text-gray-600">Quantidade *</label>
                   <input
                     type="number"
                     step="any"
                     min="0"
                     value={form.quantidade}
-                    onChange={(e) =>
-                      setForm({ ...form, quantidade: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, quantidade: e.target.value })}
                     className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600">
-                    Unidade
-                  </label>
+                  <label className="text-xs font-medium text-gray-600">Unidade</label>
                   <select
                     value={form.unidade}
-                    onChange={(e) =>
-                      setForm({ ...form, unidade: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, unidade: e.target.value })}
                     className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                   >
                     {UNIDADES.map((u) => (
@@ -790,17 +821,13 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600">
-                    Mínimo *
-                  </label>
+                  <label className="text-xs font-medium text-gray-600">Mínimo *</label>
                   <input
                     type="number"
                     step="any"
                     min="0"
                     value={form.minimo}
-                    onChange={(e) =>
-                      setForm({ ...form, minimo: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, minimo: e.target.value })}
                     className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
                   />
                 </div>
@@ -822,8 +849,7 @@ export default function App() {
                   disabled={salvando}
                   className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60"
                 >
-                  <Check size={16} />{" "}
-                  {salvando ? "Salvando..." : "Salvar"}
+                  <Check size={16} /> {salvando ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </div>
@@ -831,7 +857,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - RETIRAR */}
+      {/* RETIRAR */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -848,9 +874,7 @@ export default function App() {
             </div>
             <div className="px-6 py-6 space-y-5">
               <div className="bg-gray-50 rounded-xl p-3">
-                <p className="font-medium text-gray-800">
-                  {itemRetirar.nome}
-                </p>
+                <p className="font-medium text-gray-800">{itemRetirar.nome}</p>
                 <p className="text-xs text-gray-500">
                   {itemRetirar.local} · Lote {itemRetirar.lote} · Disponível:{" "}
                   {itemRetirar.quantidade} {itemRetirar.unidade}
@@ -870,9 +894,7 @@ export default function App() {
                     onChange={(e) => setQtdRetirar(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-shadow"
                   />
-                  <span className="text-sm text-gray-500 shrink-0">
-                    {itemRetirar.unidade}
-                  </span>
+                  <span className="text-sm text-gray-500 shrink-0">{itemRetirar.unidade}</span>
                 </div>
               </div>
               <div>
@@ -903,8 +925,7 @@ export default function App() {
                   disabled={salvando}
                   className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60"
                 >
-                  <Check size={16} />{" "}
-                  {salvando ? "Salvando..." : "Confirmar baixa"}
+                  <Check size={16} /> {salvando ? "Salvando..." : "Confirmar baixa"}
                 </button>
               </div>
             </div>
@@ -912,7 +933,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - TRANSFERÊNCIA */}
+      {/* TRANSFERIR */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -929,18 +950,13 @@ export default function App() {
             </div>
             <div className="px-6 py-6 space-y-5">
               <div className="bg-gray-50 rounded-xl p-3">
-                <p className="font-medium text-gray-800">
-                  {itemTransferir.nome}
-                </p>
+                <p className="font-medium text-gray-800">{itemTransferir.nome}</p>
                 <p className="text-xs text-gray-500">
                   Lote {itemTransferir.lote} · Disponível:{" "}
                   {itemTransferir.quantidade} {itemTransferir.unidade}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  De:{" "}
-                  <span className="font-medium text-gray-700">
-                    {itemTransferir.local}
-                  </span>
+                  De: <span className="font-medium text-gray-700">{itemTransferir.local}</span>
                 </p>
               </div>
               <div>
@@ -973,9 +989,7 @@ export default function App() {
                     onChange={(e) => setQtdTransferir(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-shadow"
                   />
-                  <span className="text-sm text-gray-500 shrink-0">
-                    {itemTransferir.unidade}
-                  </span>
+                  <span className="text-sm text-gray-500 shrink-0">{itemTransferir.unidade}</span>
                 </div>
               </div>
               <div>
@@ -1006,8 +1020,7 @@ export default function App() {
                   disabled={salvando}
                   className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60"
                 >
-                  <Check size={16} />{" "}
-                  {salvando ? "Transferindo..." : "Confirmar transferência"}
+                  <Check size={16} /> {salvando ? "Transferindo..." : "Confirmar transferência"}
                 </button>
               </div>
             </div>
@@ -1015,7 +1028,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL - HISTÓRICO */}
+      {/* HISTÓRICO */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
@@ -1032,9 +1045,7 @@ export default function App() {
             </div>
             <div className="px-6 py-4 overflow-y-auto">
               {carregandoHistorico ? (
-                <p className="text-sm text-gray-400 text-center py-8">
-                  Carregando...
-                </p>
+                <p className="text-sm text-gray-400 text-center py-8">Carregando...</p>
               ) : historico.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-8">
                   Nenhuma movimentação registrada ainda.
@@ -1059,9 +1070,7 @@ export default function App() {
                                 : "bg-teal-100 text-teal-700"
                             }`}
                           >
-                            {h.tipo === "transferencia"
-                              ? "Transferência"
-                              : "Saída"}
+                            {h.tipo === "transferencia" ? "Transferência" : "Saída"}
                           </span>
                           {h.tipo === "transferencia" ? (
                             <span>
