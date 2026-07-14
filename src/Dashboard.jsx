@@ -13,35 +13,22 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
 
   async function carregarCategorias() {
     try {
-      // PASSO 1: Buscar IDs das categorias permitidas
-      const { data: perms, error: errorPerms } = await supabase
-        .from('user_categoria_permissao')
-        .select('categoria_id')
-        .eq('user_id', sessao.user.id);
+      // Usar a função RPC para buscar categorias permitidas
+      const { data, error } = await supabase.rpc('get_categorias_permitidas', {
+        user_id: sessao.user.id
+      });
 
-      if (errorPerms) throw errorPerms;
-
-      if (!perms || perms.length === 0) {
-        setCategorias([]);
-        setCarregando(false);
+      if (error) {
+        console.error("Erro na RPC:", error);
+        setErro("Erro ao carregar permissões: " + error.message);
         return;
       }
 
-      const ids = perms.map(p => p.categoria_id);
-
-      // PASSO 2: Buscar dados completos das categorias
-      const { data: cats, error: errorCats } = await supabase
-        .from('categorias')
-        .select('*')
-        .in('id', ids)
-        .order('nome', { ascending: true });
-
-      if (errorCats) throw errorCats;
-
-      setCategorias(cats || []);
+      console.log("Categorias retornadas pela RPC:", data);
+      setCategorias(data || []);
     } catch (err) {
-      console.error(err);
-      setErro(err.message);
+      console.error("Erro inesperado:", err);
+      setErro("Erro ao carregar permissões: " + err.message);
     } finally {
       setCarregando(false);
     }
