@@ -2,48 +2,95 @@ import { useState, useEffect } from "react";
 import { Package, LogOut, Layers, ChevronLeft, Sprout, Tractor } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
+// Lista de categorias (para fallback e seed)
+const CATEGORIAS_PADRAO = [
+  { nome: 'ADUBO', descricao: 'Adubos e fertilizantes' },
+  { nome: 'BOMBAS', descricao: 'Bombas e acessórios' },
+  { nome: 'CAÇA/PESCA', descricao: 'Artigos de caça e pesca' },
+  { nome: 'CALÇADOS', descricao: 'Calçados e botas' },
+  { nome: 'CORDAS/LONA', descricao: 'Cordas, lonas e coberturas' },
+  { nome: 'DEFENSIVOS', descricao: 'Defensivos agrícolas' },
+  { nome: 'DIVERSOS', descricao: 'Diversos' },
+  { nome: 'ELÉTRICO', descricao: 'Materiais elétricos' },
+  { nome: 'EMBALAGENS', descricao: 'Embalagens' },
+  { nome: 'EPI', descricao: 'Equipamentos de proteção individual' },
+  { nome: 'FERRAGENS E FERRAMENTAS', descricao: 'Ferragens e ferramentas' },
+  { nome: 'FERTILIZANTES', descricao: 'Fertilizantes' },
+  { nome: 'HIDRAULICA', descricao: 'Hidráulica' },
+  { nome: 'IRRIGAÇÃO', descricao: 'Irrigação' },
+  { nome: 'JARDINAGEM', descricao: 'Jardinagem' },
+  { nome: 'MADEIRAS', descricao: 'Madeiras e derivados' },
+  { nome: 'MAQUINAS', descricao: 'Máquinas e equipamentos' },
+  { nome: 'PRODUTOS PARA USO LOJA', descricao: 'Produtos para uso em loja' },
+  { nome: 'PULVERIZADORES', descricao: 'Pulverizadores' },
+  { nome: 'RAÇÕES E PET', descricao: 'Rações e produtos pet' },
+  { nome: 'SACARIA', descricao: 'Sacaria e embalagens' },
+  { nome: 'SELARIA', descricao: 'Selaria e artefatos de couro' },
+  { nome: 'SEM GRUPO', descricao: 'Sem grupo definido' },
+  { nome: 'SEMENTES', descricao: 'Sementes' },
+  { nome: 'UTILIDADES DO LAR', descricao: 'Utilidades domésticas' },
+  { nome: 'VETERINÁRIO', descricao: 'Produtos veterinários' },
+];
+
 export default function Dashboard({ sessao, onSelectCategoria }) {
   const [categorias, setCategorias] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [inserindo, setInserindo] = useState(false);
 
   useEffect(() => {
     carregarCategorias();
   }, []);
 
   async function carregarCategorias() {
+    setCarregando(true);
+    setErro("");
     try {
-      console.log("=== INICIANDO CARGA DE CATEGORIAS ===");
-      console.log("Usuário ID:", sessao?.user?.id);
-
-      // Consulta direta à tabela categorias
+      // 1. Tentar buscar do Supabase
       const { data, error } = await supabase
         .from('categorias')
         .select('*')
         .order('nome', { ascending: true });
 
-      console.log("Dados retornados:", data);
-      console.log("Erro:", error);
+      if (error) throw error;
 
-      if (error) {
-        console.error("Erro na consulta:", error);
-        setErro("Erro ao carregar categorias: " + error.message);
+      if (data && data.length > 0) {
+        setCategorias(data);
         return;
       }
 
-      if (!data || data.length === 0) {
-        console.warn("Nenhuma categoria encontrada. A tabela pode estar vazia.");
-        setCategorias([]);
-        return;
-      }
-
-      console.log("Categorias carregadas com sucesso:", data.length);
-      setCategorias(data);
+      // 2. Se tabela vazia, exibir mensagem
+      setCategorias([]);
     } catch (err) {
-      console.error("Erro inesperado:", err);
-      setErro("Erro ao carregar categorias: " + err.message);
+      console.error("Erro na consulta:", err);
+      setErro(err.message);
     } finally {
       setCarregando(false);
+    }
+  }
+
+  // Função para inserir categorias automaticamente
+  async function inserirCategorias() {
+    setInserindo(true);
+    setErro("");
+    try {
+      // Inserir cada categoria uma por uma (para evitar conflitos)
+      for (const cat of CATEGORIAS_PADRAO) {
+        const { error } = await supabase
+          .from('categorias')
+          .insert({ nome: cat.nome, descricao: cat.descricao })
+          .select();
+        if (error && error.code !== '23505') { // ignorar duplicados
+          throw error;
+        }
+      }
+      // Recarregar a lista
+      await carregarCategorias();
+    } catch (err) {
+      console.error("Erro ao inserir categorias:", err);
+      setErro("Erro ao inserir categorias: " + err.message);
+    } finally {
+      setInserindo(false);
     }
   }
 
@@ -51,10 +98,12 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
     await supabase.auth.signOut();
   }
 
+  // Enquanto carrega
   if (carregando) {
     return <div className="min-h-screen flex items-center justify-center bg-amber-50">Carregando...</div>;
   }
 
+  // Se erro
   if (erro) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-amber-50 p-4">
@@ -72,6 +121,50 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
     );
   }
 
+  // Se não há categorias, mostrar botão para inserir
+  if (categorias.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
+        <div className="max-w-7xl mx-auto">
+          <header className="relative overflow-hidden bg-gradient-to-r from-green-800 to-green-700 rounded-2xl p-5 sm:p-7 mb-8 shadow-xl shadow-green-900/30 border border-green-600/30">
+            <div className="relative flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/10 backdrop-blur-sm text-white p-3 rounded-2xl border border-white/20">
+                  <Package size={28} />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                    Depósito Agrícola
+                    <Tractor size={20} className="text-amber-300" />
+                  </h1>
+                  <p className="text-sm text-green-100">Sistema de Gestão de Estoque</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 bg-red-500/20 text-white hover:bg-red-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <LogOut size={18} /> Sair
+              </button>
+            </div>
+          </header>
+
+          <div className="bg-white rounded-2xl p-10 text-center shadow-md">
+            <p className="text-gray-600 mb-4">Nenhuma categoria encontrada no banco de dados.</p>
+            <button
+              onClick={inserirCategorias}
+              disabled={inserindo}
+              className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {inserindo ? 'Inserindo...' : 'Inserir categorias automaticamente'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tela principal com categorias
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
@@ -102,7 +195,6 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
           </div>
         </header>
 
-        {/* Grid de categorias */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {categorias.map((cat) => (
             <button
@@ -123,13 +215,6 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
             </button>
           ))}
         </div>
-
-        {categorias.length === 0 && (
-          <div className="bg-white rounded-2xl p-10 text-center text-gray-500">
-            <p>Nenhuma categoria encontrada.</p>
-            <p className="text-sm text-gray-400 mt-2">Verifique se a tabela categorias tem dados.</p>
-          </div>
-        )}
       </div>
     </div>
   );
