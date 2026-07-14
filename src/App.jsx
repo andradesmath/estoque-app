@@ -9,6 +9,8 @@ import Auth from "./Auth";
 
 const DIAS_ALERTA_VENCIMENTO = 90;
 const UNIDADES = ["L", "mL", "kg", "g", "un"];
+
+// ===== NOVOS LOCAIS ADICIONADOS =====
 const LOCAIS = [
   "Casa de Adubo - Depósito",
   "Casa de Adubo - Balcão",
@@ -16,7 +18,20 @@ const LOCAIS = [
   "Porteira - Balcão",
   "Sérgio - Depósito",
   "Luciano - Depósito",
+  "Piatã - Depósito",    // NOVO
+  "Piatã - Balcão",      // NOVO
 ];
+
+// ===== MOTIVOS PARA SAÍDA =====
+const MOTIVOS_SAIDA = [
+  "Aplicação",
+  "Perda por Deterioração",
+  "Perda por Validade",
+  "Não Localizado",
+  "Vendido",
+  "Outro"
+];
+
 const vazio = {
   nome: "",
   lote: "",
@@ -93,6 +108,7 @@ export default function App() {
   const [itemRetirar, setItemRetirar] = useState(null);
   const [qtdRetirar, setQtdRetirar] = useState("");
   const [motivoRetirar, setMotivoRetirar] = useState("");
+  const [motivoPersonalizado, setMotivoPersonalizado] = useState(""); // para "Outro"
 
   const [mostrarTransferir, setMostrarTransferir] = useState(false);
   const [itemTransferir, setItemTransferir] = useState(null);
@@ -194,14 +210,12 @@ export default function App() {
     };
     let error;
     if (editandoId) {
-      // Atualização
       const { error: e } = await supabase
         .from("itens")
         .update(dados)
         .eq("id", editandoId);
       error = e;
     } else {
-      // Inserção
       dados.created_by = sessao.user.id;
       const { error: e } = await supabase.from("itens").insert(dados);
       error = e;
@@ -221,11 +235,12 @@ export default function App() {
     else carregarItens();
   }
 
-  // ===== RETIRADA =====
+  // ===== RETIRADA (com novos motivos) =====
   function abrirRetirar(item) {
     setItemRetirar(item);
     setQtdRetirar("");
     setMotivoRetirar("");
+    setMotivoPersonalizado("");
     setErro("");
     setMostrarRetirar(true);
   }
@@ -235,6 +250,7 @@ export default function App() {
     setItemRetirar(null);
     setQtdRetirar("");
     setMotivoRetirar("");
+    setMotivoPersonalizado("");
   }
 
   async function confirmarRetirada() {
@@ -246,6 +262,16 @@ export default function App() {
     if (qtd > itemRetirar.quantidade) {
       setErro(`Só há ${itemRetirar.quantidade} ${itemRetirar.unidade} em estoque.`);
       return;
+    }
+
+    // Definir o motivo final
+    let motivoFinal = motivoRetirar;
+    if (motivoRetirar === "Outro") {
+      if (!motivoPersonalizado.trim()) {
+        setErro("Por favor, descreva o motivo.");
+        return;
+      }
+      motivoFinal = motivoPersonalizado.trim();
     }
 
     setSalvando(true);
@@ -272,7 +298,7 @@ export default function App() {
       unidade: itemRetirar.unidade,
       local_origem: itemRetirar.local,
       local_destino: null,
-      motivo: motivoRetirar.trim() || null,
+      motivo: motivoFinal,
       created_by: sessao.user.id,
     });
 
@@ -317,7 +343,6 @@ export default function App() {
     setSalvando(true);
     setErro("");
 
-    // Atualiza origem
     const { error: erroOrigem } = await supabase
       .from("itens")
       .update({ 
@@ -332,7 +357,6 @@ export default function App() {
       return;
     }
 
-    // Verifica se já existe item com mesmo nome/lote/local destino
     const { data: existente } = await supabase
       .from("itens")
       .select("*")
@@ -395,7 +419,10 @@ export default function App() {
     setCarregandoHistorico(true);
     const { data, error } = await supabase
       .from("movimentacoes")
-      .select("*")
+      .select(`
+        *,
+        profiles!created_by (nome)
+      `)
       .order("criado_em", { ascending: false })
       .limit(50);
     if (!error) setHistorico(data || []);
@@ -731,7 +758,8 @@ export default function App() {
       </div>
 
       {/* ===== MODAIS ===== */}
-      {/* FORMULÁRIO */}
+
+      {/* MODAL - FORMULÁRIO (sem alterações) */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -857,7 +885,7 @@ export default function App() {
         </div>
       )}
 
-      {/* RETIRAR */}
+      {/* MODAL - RETIRAR (com novos motivos) */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -899,15 +927,35 @@ export default function App() {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">
-                  Motivo / aplicação (opcional)
+                  Motivo da saída *
                 </label>
-                <input
+                <select
                   value={motivoRetirar}
-                  onChange={(e) => setMotivoRetirar(e.target.value)}
-                  placeholder="Ex: Aplicação talhão 3"
-                  className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-shadow"
-                />
+                  onChange={(e) => {
+                    setMotivoRetirar(e.target.value);
+                    if (e.target.value !== "Outro") setMotivoPersonalizado("");
+                  }}
+                  className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  <option value="">Selecione um motivo...</option>
+                  {MOTIVOS_SAIDA.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
               </div>
+              {motivoRetirar === "Outro" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Descreva o motivo *
+                  </label>
+                  <input
+                    value={motivoPersonalizado}
+                    onChange={(e) => setMotivoPersonalizado(e.target.value)}
+                    placeholder="Ex: Devolução ao fornecedor"
+                    className="w-full mt-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-shadow"
+                  />
+                </div>
+              )}
               {erro && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-xl">
                   {erro}
@@ -933,7 +981,7 @@ export default function App() {
         </div>
       )}
 
-      {/* TRANSFERIR */}
+      {/* MODAL - TRANSFERIR (com novos locais) */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1028,7 +1076,7 @@ export default function App() {
         </div>
       )}
 
-      {/* HISTÓRICO */}
+      {/* MODAL - HISTÓRICO (com nome do operador) */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
@@ -1079,7 +1127,10 @@ export default function App() {
                           ) : (
                             <span>{h.local_origem || ""}</span>
                           )}
-                          {h.motivo && <span>· {h.motivo}</span>}
+                          {h.motivo && <span className="text-gray-400">· {h.motivo}</span>}
+                          {h.profiles?.nome && (
+                            <span className="text-gray-400">· {h.profiles.nome}</span>
+                          )}
                         </p>
                       </div>
                       <span
