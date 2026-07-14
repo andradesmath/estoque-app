@@ -13,13 +13,18 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
 
   async function carregarCategorias() {
     try {
-      console.log("Buscando permissões para usuário:", sessao.user.id);
+      console.log("=== DEBUG START ===");
+      console.log("User ID:", sessao.user.id);
+      console.log("User Email:", sessao.user.email);
 
-      // Passo 1: Buscar os IDs das categorias que o usuário tem permissão
+      // PASSO 1: Buscar IDs das categorias permitidas
       const { data: perms, error: errorPerms } = await supabase
         .from('user_categoria_permissao')
         .select('categoria_id')
         .eq('user_id', sessao.user.id);
+
+      console.log("Permissões retornadas:", perms);
+      console.log("Erro permissões:", errorPerms);
 
       if (errorPerms) {
         console.error("Erro ao buscar permissões:", errorPerms);
@@ -27,22 +32,25 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
         return;
       }
 
-      console.log("IDs de categorias permitidas:", perms);
-
       if (!perms || perms.length === 0) {
+        console.log("Nenhuma permissão encontrada.");
         setCategorias([]);
         setCarregando(false);
         return;
       }
 
       const ids = perms.map(p => p.categoria_id);
+      console.log("IDs das categorias:", ids);
 
-      // Passo 2: Buscar os dados completos das categorias
+      // PASSO 2: Buscar dados completos das categorias
       const { data: cats, error: errorCats } = await supabase
         .from('categorias')
         .select('*')
         .in('id', ids)
         .order('nome', { ascending: true });
+
+      console.log("Categorias retornadas:", cats);
+      console.log("Erro categorias:", errorCats);
 
       if (errorCats) {
         console.error("Erro ao buscar categorias:", errorCats);
@@ -56,6 +64,7 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
       setErro("Erro ao carregar permissões: " + err.message);
     } finally {
       setCarregando(false);
+      console.log("=== DEBUG END ===");
     }
   }
 
@@ -73,7 +82,6 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md text-center">
           <h2 className="text-xl font-bold text-red-600 mb-2">Erro</h2>
           <p className="text-gray-600">{erro}</p>
-          <p className="text-sm text-gray-500 mt-2">Verifique se você tem permissões cadastradas no banco de dados.</p>
           <button
             onClick={carregarCategorias}
             className="mt-4 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700"
