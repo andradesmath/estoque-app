@@ -7,7 +7,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from "recharts";
-import { supabase } from "./supabaseClient";
+import { supabase } from "../supabaseClient";
 
 const MESES_PREVISAO = 3;
 const JANELA_REGRESSAO = 6;
