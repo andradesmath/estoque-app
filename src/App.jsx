@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import Auth from "./Auth";
-import DashboardPrincipal from "./pages/DashboardPrincipal";
-import Estoque from "./pages/Estoque";
-import Financeiro from "./pages/Financeiro";
+import Dashboard from "./Dashboard";
+import Setor from "./Setor";
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
   const [carregando, setCarregando] = useState(true);
-  const [tela, setTela] = useState("dashboard");
+  const [tela, setTela] = useState('dashboard');
+  const [categoriaAtiva, setCategoriaAtiva] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,24 +23,26 @@ export default function App() {
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  function navegarPara(tela) {
-    setTela(tela);
+  function irParaSetor(categoria) {
+    setCategoriaAtiva(categoria);
+    setTela('setor');
   }
 
-  if (carregando) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  function voltarDashboard() {
+    setTela('dashboard');
+    setCategoriaAtiva(null);
+  }
+
+  if (carregando) return <div className="min-h-screen flex items-center justify-center bg-amber-50">Carregando...</div>;
   if (!sessao) return <Auth onLogin={() => {}} />;
 
-  if (tela === "dashboard") {
-    return <DashboardPrincipal sessao={sessao} onNavigate={navegarPara} />;
+  if (tela === 'dashboard') {
+    return <Dashboard sessao={sessao} onSelectCategoria={irParaSetor} />;
   }
 
-  if (tela === "estoque") {
-    return <Estoque sessao={sessao} onNavigate={navegarPara} />;
+  if (tela === 'setor' && categoriaAtiva) {
+    return <Setor sessao={sessao} categoria={categoriaAtiva} onVoltar={voltarDashboard} />;
   }
 
-  if (tela === "financeiro") {
-    return <Financeiro onNavigate={navegarPara} />;
-  }
-
-  return <DashboardPrincipal sessao={sessao} onNavigate={navegarPara} />;
+  return <Dashboard sessao={sessao} onSelectCategoria={irParaSetor} />;
 }
