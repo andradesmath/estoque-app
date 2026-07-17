@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Package, LogOut, Layers, ChevronLeft, Tractor, AlertTriangle } from "lucide-react";
+import { Package, LogOut, Layers, ChevronLeft, Tractor, AlertTriangle, FileText } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
 // Fallback local (caso o Supabase falhe)
@@ -32,7 +32,7 @@ const CATEGORIAS_PADRAO = [
   { id: '26', nome: 'VETERINÁRIO', descricao: 'Produtos veterinários' },
 ];
 
-export default function Dashboard({ sessao, onSelectCategoria }) {
+export default function Dashboard({ sessao, onSelectCategoria, onOpenLogs }) {
   const [categorias, setCategorias] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
@@ -113,12 +113,21 @@ export default function Dashboard({ sessao, onSelectCategoria }) {
                 <p className="text-sm text-green-100">Sistema de Gestão de Estoque</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 bg-red-500/20 text-white hover:bg-red-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
-            >
-              <LogOut size={18} /> Sair
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Botão Logs de Exclusão */}
+              <button
+                onClick={onOpenLogs}
+                className="flex items-center gap-1.5 bg-purple-500/20 text-white hover:bg-purple-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <FileText size={18} /> Logs
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 bg-red-500/20 text-white hover:bg-red-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <LogOut size={18} /> Sair
+              </button>
+            </div>
           </div>
         </header>
 
