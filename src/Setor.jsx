@@ -8,7 +8,7 @@ import {
 import { supabase } from "./supabaseClient";
 
 const DIAS_ALERTA_VENCIMENTO = 90;
-const UNIDADES = ["L", "mL", "kg", "g", "un"];
+const UNIDADES = ["L", "mL", "kg", "g", "un", "M"];
 const LOCAIS = [
   "Casa de Adubo - Depósito",
   "Casa de Adubo - Balcão",
