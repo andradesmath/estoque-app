@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertOctagon, PackageX, PackageMinus,
   ArrowLeftRight, Plus, Trash2, Pencil, X, Check,
   Search, History, MapPin, LogOut, ChevronLeft,
-  Sprout
+  Sprout, Package
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -79,7 +79,7 @@ function getStatusInfo(item) {
   return { label: "OK", class: "bg-green-100 text-green-700 border-green-300" };
 }
 
-export default function Setor({ sessao, categoria, onVoltar }) {
+export default function Setor({ sessao, categoria, onVoltar, onOpenCadastroProduto }) {
   // ===== ESTADOS =====
   const [itens, setItens] = useState([]);
   const [produtos, setProdutos] = useState([]);
@@ -233,7 +233,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
     setTotalProduto(0);
   }
 
-  // Função para lidar com a mudança no campo de busca de produtos
   function handleProdutoBusca(texto) {
     setTermoBusca(texto);
 
@@ -243,7 +242,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    // Busca por correspondência exata (código - nome)
     const encontrado = produtos.find(p => {
       const codigoNome = `${p.codigo} - ${p.nome}`;
       return codigoNome.toLowerCase() === textoLimpo.toLowerCase() ||
@@ -261,7 +259,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    // Busca parcial
     const parcial = produtos.find(p =>
       p.nome.toLowerCase().includes(textoLimpo.toLowerCase()) ||
       p.codigo.toLowerCase().includes(textoLimpo.toLowerCase())
@@ -278,11 +275,9 @@ export default function Setor({ sessao, categoria, onVoltar }) {
     }
   }
 
-  // Função auxiliar para encontrar produto pelo termo de busca (usada no salvar)
   function encontrarProdutoPeloTermo(termo) {
     if (!termo.trim()) return null;
     const limpo = termo.trim().toLowerCase();
-    // Primeiro tenta exato
     let encontrado = produtos.find(p => {
       const codigoNome = `${p.codigo} - ${p.nome}`;
       return codigoNome.toLowerCase() === limpo ||
@@ -291,7 +286,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
              p.codigo.replace(/^0+/, '') === limpo.replace(/^0+/, '');
     });
     if (encontrado) return encontrado;
-    // Depois tenta parcial
     encontrado = produtos.find(p =>
       p.nome.toLowerCase().includes(limpo) ||
       p.codigo.toLowerCase().includes(limpo)
@@ -300,13 +294,11 @@ export default function Setor({ sessao, categoria, onVoltar }) {
   }
 
   async function salvarForm() {
-    // --- TENTA ENCONTRAR O PRODUTO PELO TERMO DE BUSCA SE O ID ESTIVER VAZIO ---
     let produtoId = form.produto_id;
     if (!produtoId && termoBusca.trim()) {
       const encontrado = encontrarProdutoPeloTermo(termoBusca);
       if (encontrado) {
         produtoId = encontrado.id;
-        // Atualiza o form com os dados do produto
         setForm({
           ...form,
           produto_id: encontrado.id,
@@ -316,7 +308,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       }
     }
 
-    // Se ainda não tiver produto_id, tenta usar o nome do form
     if (!produtoId && form.nome.trim()) {
       const encontrado = encontrarProdutoPeloTermo(form.nome);
       if (encontrado) {
@@ -330,7 +321,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       }
     }
 
-    // Validação final
     if (!produtoId) {
       setErro("Selecione um produto válido da lista.");
       return;
@@ -356,7 +346,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    // Monta os dados para salvar
     const dados = {
       produto_id: produtoId,
       nome: form.nome.trim(),
@@ -676,6 +665,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* HEADER */}
         <header className="relative overflow-hidden bg-gradient-to-r from-green-800 to-green-700 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl shadow-green-900/30 border border-green-600/30">
           <div className="absolute -right-10 -top-10 w-48 h-48 bg-yellow-500/10 rounded-full blur-2xl" />
           <div className="absolute -left-10 bottom-0 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl" />
@@ -709,6 +699,13 @@ export default function Setor({ sessao, categoria, onVoltar }) {
               >
                 <Plus size={18} /> Novo item
               </button>
+              {/* Botão Novo Produto */}
+              <button
+                onClick={onOpenCadastroProduto}
+                className="flex items-center gap-1.5 bg-blue-500/20 text-white hover:bg-blue-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <Package size={18} /> Novo Produto
+              </button>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 bg-red-500/20 text-white hover:bg-red-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
@@ -719,6 +716,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         </header>
 
+        {/* ALERTAS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -788,6 +786,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </button>
         </div>
 
+        {/* BUSCA E FILTRO */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -819,6 +818,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         )}
 
+        {/* RESUMO ESTOQUE */}
         {estoqueTotal.length > 0 && (
           <div className="mb-6 bg-white rounded-2xl border border-gray-200 shadow-md p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">📦 Resumo de Estoque - {categoria.nome}</h3>
@@ -838,6 +838,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         )}
 
+        {/* LISTA DE ITENS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">Carregando itens...</div>
@@ -887,6 +888,8 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       </div>
 
       {/* ===== MODAIS ===== */}
+
+      {/* MODAL FORMULÁRIO */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -919,6 +922,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
                   <p className="text-xs text-green-600 mt-1">✅ Produto selecionado: {form.nome}</p>
                 )}
               </div>
+
               {form.produto_id && (
                 <div className="bg-green-50 rounded-xl p-3 border border-green-200">
                   <p className="text-xs font-medium text-green-700 mb-1">📦 Quantidade atual por local:</p>
@@ -940,6 +944,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
                   </div>
                 </div>
               )}
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Local de armazenamento *</label>
                 <select
@@ -1016,6 +1021,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
+      {/* MODAL RETIRAR */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1080,6 +1086,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
+      {/* MODAL TRANSFERIR */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1152,6 +1159,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
+      {/* MODAL HISTÓRICO */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
