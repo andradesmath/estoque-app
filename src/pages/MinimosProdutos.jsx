@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Save, Package, AlertCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Save, Package, AlertCircle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 export default function MinimosProdutos({ onVoltar }) {
@@ -27,50 +27,50 @@ export default function MinimosProdutos({ onVoltar }) {
       if (catsError) throw catsError;
       setCategorias(cats || []);
 
-      // Buscar produtos com estoque total via consulta SQL
+      // Opção 1: usar a view (mais eficiente)
       const { data: prods, error: prodsError } = await supabase
-        .from("produtos")
-        .select(`
-          id,
-          codigo,
-          nome,
-          categoria_id,
-          minimo_global,
-          categorias (nome)
-        `)
+        .from("estoque_total_produto")
+        .select("*")
         .order("nome");
 
-      if (prodsError) throw prodsError;
+      if (prodsError) {
+        // Fallback: se a view não existir, busca manualmente
+        console.warn("View não encontrada, buscando manualmente...");
+        const { data: allProds, error: allError } = await supabase
+          .from("produtos")
+          .select(`
+            id,
+            codigo,
+            nome,
+            minimo_global,
+            categorias (nome)
+          `)
+          .order("nome");
 
-      // Para cada produto, buscar a soma de quantidades em itens
-      const produtosComEstoque = await Promise.all(
-        (prods || []).map(async (prod) => {
-          const { data: itens, error: itensError } = await supabase
-            .from("itens")
-            .select("quantidade")
-            .eq("produto_id", prod.id);
+        if (allError) throw allError;
 
-          if (itensError) {
-            console.error("Erro ao buscar itens para produto", prod.id, itensError);
+        const produtosComEstoque = await Promise.all(
+          (allProds || []).map(async (prod) => {
+            const { data: somaData } = await supabase
+              .from("itens")
+              .select("quantidade")
+              .eq("produto_id", prod.id);
+            const total = somaData?.reduce((acc, item) => acc + (item.quantidade || 0), 0) || 0;
             return {
-              ...prod,
-              quantidade_total: 0,
+              produto_id: prod.id,
+              codigo: prod.codigo,
+              nome: prod.nome,
               categoria: prod.categorias?.nome || "Sem categoria",
+              minimo_global: prod.minimo_global || 0,
+              quantidade_total: total,
             };
-          }
-
-          const total = itens.reduce((acc, item) => acc + (item.quantidade || 0), 0);
-          return {
-            ...prod,
-            quantidade_total: total,
-            categoria: prod.categorias?.nome || "Sem categoria",
-          };
-        })
-      );
-
-      setProdutos(produtosComEstoque);
+          })
+        );
+        setProdutos(produtosComEstoque);
+      } else {
+        setProdutos(prods || []);
+      }
     } catch (err) {
-      console.error("Erro carregar dados:", err);
       setErro(err.message);
     } finally {
       setCarregando(false);
@@ -80,7 +80,7 @@ export default function MinimosProdutos({ onVoltar }) {
   function handleMinimoChange(produtoId, novoValor) {
     setProdutos(prev =>
       prev.map(p =>
-        p.id === produtoId
+        p.produto_id === produtoId
           ? { ...p, minimo_global: parseFloat(novoValor) || 0 }
           : p
       )
@@ -93,9 +93,8 @@ export default function MinimosProdutos({ onVoltar }) {
     setSucesso(false);
 
     try {
-      // Atualizar cada produto com o novo minimo_global
       const updates = produtos.map(p => ({
-        id: p.id,
+        id: p.produto_id,
         minimo_global: p.minimo_global,
       }));
 
@@ -143,12 +142,6 @@ export default function MinimosProdutos({ onVoltar }) {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={carregarDados}
-              className="flex items-center gap-1 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-xl transition"
-            >
-              <RefreshCw size={16} /> Atualizar
-            </button>
             <select
               value={filtroCategoria}
               onChange={(e) => setFiltroCategoria(e.target.value)}
@@ -215,13 +208,13 @@ export default function MinimosProdutos({ onVoltar }) {
                   </tr>
                 ) : (
                   produtosFiltrados.map((prod) => {
-                    const total = prod.quantidade_total || 0;
+                    const total = parseFloat(prod.quantidade_total) || 0;
                     const minimo = parseFloat(prod.minimo_global) || 0;
                     const status = total < minimo ? "⚠️ Baixo" : "✅ OK";
                     const statusClass = total < minimo ? "text-red-600" : "text-green-600";
 
                     return (
-                      <tr key={prod.id} className="hover:bg-gray-50">
+                      <tr key={prod.produto_id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {prod.codigo}
                         </td>
@@ -240,7 +233,7 @@ export default function MinimosProdutos({ onVoltar }) {
                             step="0.01"
                             min="0"
                             value={prod.minimo_global}
-                            onChange={(e) => handleMinimoChange(prod.id, e.target.value)}
+                            onChange={(e) => handleMinimoChange(prod.produto_id, e.target.value)}
                             className="w-24 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </td>
