@@ -233,7 +233,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
     setTotalProduto(0);
   }
 
-  // Função melhorada para busca de produtos
+  // Função para lidar com a mudança no campo de busca de produtos
   function handleProdutoBusca(texto) {
     setTermoBusca(texto);
 
@@ -243,7 +243,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    // Tenta encontrar por correspondência exata (código - nome)
+    // Busca por correspondência exata (código - nome)
     const encontrado = produtos.find(p => {
       const codigoNome = `${p.codigo} - ${p.nome}`;
       return codigoNome.toLowerCase() === textoLimpo.toLowerCase() ||
@@ -261,7 +261,7 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    // Busca parcial (case insensitive)
+    // Busca parcial
     const parcial = produtos.find(p =>
       p.nome.toLowerCase().includes(textoLimpo.toLowerCase()) ||
       p.codigo.toLowerCase().includes(textoLimpo.toLowerCase())
@@ -278,12 +278,60 @@ export default function Setor({ sessao, categoria, onVoltar }) {
     }
   }
 
-  async function salvarForm() {
-    // Log para depuração
-    console.log("Valores do formulário:", form);
+  // Função auxiliar para encontrar produto pelo termo de busca (usada no salvar)
+  function encontrarProdutoPeloTermo(termo) {
+    if (!termo.trim()) return null;
+    const limpo = termo.trim().toLowerCase();
+    // Primeiro tenta exato
+    let encontrado = produtos.find(p => {
+      const codigoNome = `${p.codigo} - ${p.nome}`;
+      return codigoNome.toLowerCase() === limpo ||
+             p.nome.toLowerCase() === limpo ||
+             p.codigo.toLowerCase() === limpo ||
+             p.codigo.replace(/^0+/, '') === limpo.replace(/^0+/, '');
+    });
+    if (encontrado) return encontrado;
+    // Depois tenta parcial
+    encontrado = produtos.find(p =>
+      p.nome.toLowerCase().includes(limpo) ||
+      p.codigo.toLowerCase().includes(limpo)
+    );
+    return encontrado || null;
+  }
 
-    // Validação específica
-    if (!form.produto_id) {
+  async function salvarForm() {
+    // --- TENTA ENCONTRAR O PRODUTO PELO TERMO DE BUSCA SE O ID ESTIVER VAZIO ---
+    let produtoId = form.produto_id;
+    if (!produtoId && termoBusca.trim()) {
+      const encontrado = encontrarProdutoPeloTermo(termoBusca);
+      if (encontrado) {
+        produtoId = encontrado.id;
+        // Atualiza o form com os dados do produto
+        setForm({
+          ...form,
+          produto_id: encontrado.id,
+          nome: encontrado.nome,
+        });
+        setTermoBusca(`${encontrado.codigo} - ${encontrado.nome}`);
+      }
+    }
+
+    // Se ainda não tiver produto_id, tenta usar o nome do form
+    if (!produtoId && form.nome.trim()) {
+      const encontrado = encontrarProdutoPeloTermo(form.nome);
+      if (encontrado) {
+        produtoId = encontrado.id;
+        setForm({
+          ...form,
+          produto_id: encontrado.id,
+          nome: encontrado.nome,
+        });
+        setTermoBusca(`${encontrado.codigo} - ${encontrado.nome}`);
+      }
+    }
+
+    // Validação final
+    if (!produtoId) {
       setErro("Selecione um produto válido da lista.");
       return;
     }
@@ -308,10 +356,9 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       return;
     }
 
-    setSalvando(true);
-    setErro("");
+    // Monta os dados para salvar
     const dados = {
-      produto_id: form.produto_id,
+      produto_id: produtoId,
       nome: form.nome.trim(),
       lote: form.lote.trim(),
       validade: form.validade,
@@ -321,6 +368,9 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       local: form.local,
       updated_by: sessao.user.id,
     };
+
+    setSalvando(true);
+    setErro("");
     let error;
     if (editandoId) {
       const { error: e } = await supabase
@@ -338,12 +388,9 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       setSalvando(false);
       return;
     }
-    // Recarrega os dados
     await carregarItens();
     await carregarEstoqueTotal();
-    // Fecha o modal
     fecharForm();
-    // Mensagem de sucesso
     alert("Item salvo com sucesso!");
   }
 
@@ -629,7 +676,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER */}
         <header className="relative overflow-hidden bg-gradient-to-r from-green-800 to-green-700 rounded-2xl p-5 sm:p-7 mb-6 shadow-xl shadow-green-900/30 border border-green-600/30">
           <div className="absolute -right-10 -top-10 w-48 h-48 bg-yellow-500/10 rounded-full blur-2xl" />
           <div className="absolute -left-10 bottom-0 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl" />
@@ -673,7 +719,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         </header>
 
-        {/* ALERTAS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -743,7 +788,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </button>
         </div>
 
-        {/* BUSCA E FILTRO */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -775,7 +819,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         )}
 
-        {/* RESUMO ESTOQUE */}
         {estoqueTotal.length > 0 && (
           <div className="mb-6 bg-white rounded-2xl border border-gray-200 shadow-md p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">📦 Resumo de Estoque - {categoria.nome}</h3>
@@ -795,7 +838,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
           </div>
         )}
 
-        {/* LISTA DE ITENS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">Carregando itens...</div>
@@ -845,8 +887,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
       </div>
 
       {/* ===== MODAIS ===== */}
-
-      {/* MODAL FORMULÁRIO – com busca de produtos via datalist */}
       {mostrarForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -855,7 +895,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
               <button onClick={fecharForm} className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-lg transition-colors"><X size={20} /></button>
             </div>
             <div className="px-6 py-6 space-y-5 max-h-[75vh] overflow-y-auto">
-              {/* CAMPO PRODUTO COM BUSCA */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Produto *</label>
                 <input
@@ -864,7 +903,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
                   value={termoBusca}
                   onChange={(e) => handleProdutoBusca(e.target.value)}
                   onBlur={() => {
-                    // Força a busca ao perder o foco
                     if (termoBusca.trim() && !form.produto_id) {
                       handleProdutoBusca(termoBusca);
                     }
@@ -881,8 +919,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
                   <p className="text-xs text-green-600 mt-1">✅ Produto selecionado: {form.nome}</p>
                 )}
               </div>
-
-              {/* RESUMO DE QUANTIDADES POR LOCAL (quando produto selecionado) */}
               {form.produto_id && (
                 <div className="bg-green-50 rounded-xl p-3 border border-green-200">
                   <p className="text-xs font-medium text-green-700 mb-1">📦 Quantidade atual por local:</p>
@@ -904,7 +940,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
                   </div>
                 </div>
               )}
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Local de armazenamento *</label>
                 <select
@@ -981,7 +1016,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* MODAL RETIRAR */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1046,7 +1080,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* MODAL TRANSFERIR */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1119,7 +1152,6 @@ export default function Setor({ sessao, categoria, onVoltar }) {
         </div>
       )}
 
-      {/* MODAL HISTÓRICO */}
       {mostrarHistorico && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[80vh] flex flex-col border border-white/20">
