@@ -5,6 +5,7 @@ import Dashboard from "./Dashboard";
 import Setor from "./Setor";
 import LogsExclusao from "./pages/LogsExclusao";
 import CadastroProduto from "./pages/CadastroProduto";
+import MinimosProdutos from "./pages/MinimosProdutos";
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -43,6 +44,10 @@ export default function App() {
     setTela("cadastroProduto");
   }
 
+  function abrirMinimos() {
+    setTela("minimos");
+  }
+
   if (carregando) {
     return <div className="min-h-screen flex items-center justify-center bg-amber-50">Carregando...</div>;
   }
@@ -58,6 +63,7 @@ export default function App() {
         onSelectCategoria={irParaSetor}
         onOpenLogs={abrirLogs}
         onOpenCadastroProduto={abrirCadastroProduto}
+        onOpenMinimos={abrirMinimos}
       />
     );
   }
@@ -69,6 +75,7 @@ export default function App() {
         categoria={categoriaAtiva}
         onVoltar={voltarDashboard}
         onOpenCadastroProduto={abrirCadastroProduto}
+        onOpenMinimos={abrirMinimos}
       />
     );
   }
@@ -81,12 +88,17 @@ export default function App() {
     return <CadastroProduto onVoltar={voltarDashboard} />;
   }
 
+  if (tela === "minimos") {
+    return <MinimosProdutos onVoltar={voltarDashboard} />;
+  }
+
   return (
     <Dashboard
       sessao={sessao}
       onSelectCategoria={irParaSetor}
       onOpenLogs={abrirLogs}
       onOpenCadastroProduto={abrirCadastroProduto}
+      onOpenMinimos={abrirMinimos}
     />
   );
 }
