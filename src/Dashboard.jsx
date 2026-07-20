@@ -32,7 +32,7 @@ const CATEGORIAS_PADRAO = [
   { id: '26', nome: 'VETERINÁRIO', descricao: 'Produtos veterinários' },
 ];
 
-export default function Dashboard({ sessao, onSelectCategoria, onOpenLogs }) {
+export default function Dashboard({ sessao, onSelectCategoria, onOpenLogs, onOpenCadastroProduto }) {
   const [categorias, setCategorias] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
@@ -114,6 +114,13 @@ export default function Dashboard({ sessao, onSelectCategoria, onOpenLogs }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Botão Novo Produto */}
+              <button
+                onClick={onOpenCadastroProduto}
+                className="flex items-center gap-1.5 bg-blue-500/20 text-white hover:bg-blue-500/30 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-white/10"
+              >
+                <Package size={18} /> Novo Produto
+              </button>
               {/* Botão Logs de Exclusão */}
               <button
                 onClick={onOpenLogs}
