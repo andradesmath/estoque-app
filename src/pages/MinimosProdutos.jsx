@@ -12,7 +12,6 @@ export default function MinimosProdutos({ onVoltar }) {
   const [categorias, setCategorias] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState("");
 
-  // Carregar categorias uma vez
   useEffect(() => {
     carregarCategorias();
   }, []);
@@ -20,7 +19,7 @@ export default function MinimosProdutos({ onVoltar }) {
   // Quando a categoria mudar, carregar os produtos
   useEffect(() => {
     if (filtroCategoria !== "") {
-      carregarProdutosPorCategoria(filtroCategoria);
+      carregarProdutos();
     } else {
       setProdutos([]);
     }
@@ -34,61 +33,62 @@ export default function MinimosProdutos({ onVoltar }) {
     if (!error) setCategorias(data || []);
   }
 
-  async function carregarProdutosPorCategoria(categoriaNome) {
+  async function carregarProdutos() {
     setCarregando(true);
     setErro("");
     setProdutos([]);
 
     try {
+      // 1. Buscar produtos da categoria selecionada
       let query = supabase.from("produtos").select(`
         id,
         codigo,
         nome,
         minimo_global,
+        categoria_id,
         categorias (nome)
       `);
 
-      if (categoriaNome !== "TODAS") {
-        query = query.eq("categorias.nome", categoriaNome);
+      if (filtroCategoria !== "TODAS") {
+        query = query.eq("categorias.nome", filtroCategoria);
       }
 
       const { data: prods, error: prodsError } = await query.order("nome");
 
       if (prodsError) throw prodsError;
 
-      // Se não houver produtos, retorna vazio
       if (!prods || prods.length === 0) {
         setProdutos([]);
         setCarregando(false);
         return;
       }
 
-      // Para cada produto, calcular a soma do estoque
-      const produtosComEstoque = await Promise.all(
-        prods.map(async (prod) => {
-          const { data: itens, error: itensError } = await supabase
-            .from("itens")
-            .select("quantidade")
-            .eq("produto_id", prod.id);
+      // 2. Buscar todos os itens de estoque (uma única consulta)
+      const produtoIds = prods.map(p => p.id);
+      const { data: itens, error: itensError } = await supabase
+        .from("itens")
+        .select("produto_id, quantidade")
+        .in("produto_id", produtoIds);
 
-          if (itensError) {
-            console.warn(`Erro ao buscar itens para ${prod.nome}:`, itensError);
-            return {
-              ...prod,
-              quantidade_total: 0,
-              categoria: prod.categorias?.nome || "Sem categoria",
-            };
-          }
+      if (itensError) {
+        console.warn("Erro ao buscar itens:", itensError);
+      }
 
-          const total = itens?.reduce((acc, item) => acc + (item.quantidade || 0), 0) || 0;
+      // 3. Calcular o total por produto
+      const totais = {};
+      if (itens) {
+        itens.forEach(item => {
+          const id = item.produto_id;
+          totais[id] = (totais[id] || 0) + (item.quantidade || 0);
+        });
+      }
 
-          return {
-            ...prod,
-            quantidade_total: total,
-            categoria: prod.categorias?.nome || "Sem categoria",
-          };
-        })
-      );
+      // 4. Montar a lista final com os totais
+      const produtosComEstoque = prods.map(prod => ({
+        ...prod,
+        quantidade_total: totais[prod.id] || 0,
+        categoria: prod.categorias?.nome || "Sem categoria",
+      }));
 
       setProdutos(produtosComEstoque);
     } catch (err) {
@@ -134,7 +134,7 @@ export default function MinimosProdutos({ onVoltar }) {
     }
   }
 
-  // Se nenhuma categoria selecionada, mostrar mensagem
+  // Se nenhuma categoria selecionada, mostrar tela de seleção
   if (!filtroCategoria) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-amber-50 to-green-50 p-4 sm:p-8">
@@ -227,7 +227,7 @@ export default function MinimosProdutos({ onVoltar }) {
               <div className="p-8 text-center text-gray-500">Carregando produtos...</div>
             ) : produtos.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
-                Nenhum produto encontrado para esta categoria.
+                Nenhum produto encontrado nesta categoria.
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
@@ -238,9 +238,6 @@ export default function MinimosProdutos({ onVoltar }) {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Produto
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Categoria
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Estoque Total
@@ -267,9 +264,6 @@ export default function MinimosProdutos({ onVoltar }) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {prod.nome}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {prod.categoria}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
                           {total}
