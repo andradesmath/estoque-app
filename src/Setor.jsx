@@ -6,7 +6,7 @@ import {
   Sprout, Package, ClipboardList, Settings, Camera
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
-import BarcodeScanner from "./BarcodeScanner";
+import BarcodeScanner from "./BarcodeScanner"; // <-- importa o scanner
 
 const DIAS_ALERTA_VENCIMENTO = 90;
 const UNIDADES = ["L", "mL", "kg", "g", "un", "M"];
@@ -231,7 +231,6 @@ export default function Setor({
       });
       setTermoBusca(`${encontrado.codigo} - ${encontrado.nome}`);
       setMostrarScanner(false);
-      // Foca no campo de lote após encontrar
       setTimeout(() => {
         const loteInput = document.getElementById('lote-input');
         if (loteInput) loteInput.focus();
@@ -782,7 +781,7 @@ export default function Setor({
           </div>
         </header>
 
-        {/* ALERTAS */}
+        {/* ALERTAS, BUSCA, LISTA, etc - mantido igual */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -852,7 +851,6 @@ export default function Setor({
           </button>
         </div>
 
-        {/* BUSCA E FILTRO */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -884,7 +882,6 @@ export default function Setor({
           </div>
         )}
 
-        {/* RESUMO ESTOQUE */}
         {estoqueTotal.length > 0 && (
           <div className="mb-6 bg-white rounded-2xl border border-gray-200 shadow-md p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">📦 Resumo de Estoque - {categoria.nome}</h3>
@@ -904,7 +901,6 @@ export default function Setor({
           </div>
         )}
 
-        {/* LISTA DE ITENS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">Carregando itens...</div>
