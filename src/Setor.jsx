@@ -3,8 +3,8 @@ import {
   AlertTriangle, AlertOctagon, PackageX, PackageMinus,
   ArrowLeftRight, Plus, Trash2, Pencil, X, Check,
   Search, History, MapPin, LogOut, ChevronLeft,
-  Sprout, Package, ClipboardList, Settings
-} from "lucide-react"; // <-- REMOVA "Camera" da importação
+  Sprout, Package, ClipboardList, Settings, Camera
+} from "lucide-react";
 import { supabase } from "./supabaseClient";
 import BarcodeScanner from "./BarcodeScanner";
 
@@ -211,19 +211,22 @@ export default function Setor({
   }
 
   // ============================================================
-  // SCANNER
+  // SCANNER - CORAÇÃO DA FUNÇÃO
   // ============================================================
   const handleScanBarcode = (codigo) => {
     if (!codigo) return;
     setScannerError("");
+    // Remove espaços e zeros à esquerda para comparação
     const codigoLimpo = codigo.trim().replace(/^0+/, '');
     
+    // Busca o produto na lista de produtos da categoria atual
     const encontrado = produtos.find(p => {
       const codigoProduto = p.codigo.replace(/^0+/, '');
       return codigoProduto === codigoLimpo || p.codigo === codigo;
     });
 
     if (encontrado) {
+      // Preenche o formulário com os dados do produto encontrado
       setForm({
         ...form,
         produto_id: encontrado.id,
@@ -231,6 +234,7 @@ export default function Setor({
       });
       setTermoBusca(`${encontrado.codigo} - ${encontrado.nome}`);
       setMostrarScanner(false);
+      // Foca no campo de lote para agilizar o cadastro
       setTimeout(() => {
         const loteInput = document.getElementById('lote-input');
         if (loteInput) loteInput.focus();
@@ -781,7 +785,7 @@ export default function Setor({
           </div>
         </header>
 
-        {/* ALERTAS, BUSCA, LISTA, etc - mantido igual */}
+        {/* ALERTAS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <button
             onClick={() =>
@@ -851,6 +855,7 @@ export default function Setor({
           </button>
         </div>
 
+        {/* BUSCA E FILTRO */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -882,6 +887,7 @@ export default function Setor({
           </div>
         )}
 
+        {/* RESUMO ESTOQUE */}
         {estoqueTotal.length > 0 && (
           <div className="mb-6 bg-white rounded-2xl border border-gray-200 shadow-md p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">📦 Resumo de Estoque - {categoria.nome}</h3>
@@ -901,6 +907,7 @@ export default function Setor({
           </div>
         )}
 
+        {/* LISTA DE ITENS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {carregando ? (
             <div className="col-span-full bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-400 text-sm">Carregando itens...</div>
@@ -1027,10 +1034,10 @@ export default function Setor({
                   <button
                     type="button"
                     onClick={() => setMostrarScanner(true)}
-                    className="px-3 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition flex items-center justify-center text-xl"
+                    className="px-3 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition flex items-center justify-center"
                     title="Ler código de barras"
                   >
-                    📷
+                    <Camera size={20} />
                   </button>
                 </div>
                 {form.produto_id && form.nome && (
@@ -1172,7 +1179,7 @@ export default function Setor({
         </div>
       )}
 
-      {/* MODAIS RETIRAR, TRANSFERIR, HISTÓRICO (mantidos) */}
+      {/* MODAL RETIRAR */}
       {mostrarRetirar && itemRetirar && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
@@ -1237,6 +1244,7 @@ export default function Setor({
         </div>
       )}
 
+      {/* MODAL TRANSFERIR */}
       {mostrarTransferir && itemTransferir && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
